@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manajemen Data Laptop</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; background: #f3f6fb; color: #172033; }
+    .container { width: min(960px, 92%); margin: 42px auto; }
+    header { margin-bottom: 24px; }
+    h1 { margin: 0 0 8px; font-size: 30px; }
+    header p { margin: 0; color: #667085; }
+    .panel { background: #fff; border-radius: 14px; padding: 24px; box-shadow: 0 8px 28px #18274412; margin-bottom: 22px; }
+    h2 { margin: 0 0 18px; font-size: 19px; }
+    form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 7px; }
+    input { width: 100%; padding: 11px 12px; border: 1px solid #d5dbe7; border-radius: 8px; font-size: 14px; }
+    input:focus { outline: 2px solid #c5d5ff; border-color: #476ff0; }
+    .actions { grid-column: 1 / -1; display: flex; gap: 10px; }
+    button { border: 0; border-radius: 8px; padding: 10px 15px; font-weight: 700; cursor: pointer; }
+    .primary { background: #315eea; color: white; }
+    .secondary { background: #edf0f6; color: #344054; }
+    .danger { background: #fee4e2; color: #b42318; padding: 8px 10px; }
+    .edit { background: #e0eaff; color: #2448b8; padding: 8px 10px; margin-right: 5px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+    th, td { padding: 13px 12px; border-bottom: 1px solid #edf0f5; text-align: left; font-size: 14px; }
+    th { color: #667085; background: #f9fafb; font-size: 12px; text-transform: uppercase; }
+    .empty { text-align: center; color: #667085; padding: 26px; }
+    .count { color: #667085; font-size: 13px; margin-top: 14px; }
+    @media (max-width: 700px) { form { grid-template-columns: 1fr; } .actions { flex-wrap: wrap; } h1 { font-size: 25px; } }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Manajemen Data Laptop</h1>
+      <p>Kelola data laptop — 2428240033 · PAW2 Kuis 1</p>
+    </header>
+
+    <section class="panel">
+      <h2 id="formTitle">Tambah Data Laptop</h2>
+      <form id="laptopForm">
+        <div>
+          <label for="merk_laptop">Merk Laptop</label>
+          <input id="merk_laptop" name="merk_laptop" type="text" placeholder="Contoh: ASUS" required>
+        </div>
+        <div>
+          <label for="processor">Processor</label>
+          <input id="processor" name="processor" type="text" placeholder="Contoh: Intel Core i5" required>
+        </div>
+        <div>
+          <label for="harga">Harga (Rp)</label>
+          <input id="harga" name="harga" type="number" min="0" step="1" placeholder="Contoh: 8500000" required>
+        </div>
+        <div class="actions">
+          <button class="primary" type="submit" id="submitBtn">Simpan Data</button>
+          <button class="secondary" type="button" id="cancelBtn" hidden>Batal Edit</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Daftar Laptop</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>No.</th><th>Merk Laptop</th><th>Processor</th><th>Harga</th><th>Aksi</th></tr></thead>
+          <tbody id="laptopTable"></tbody>
+        </table>
+      </div>
+      <div class="count" id="count"></div>
+    </section>
+  </main>
+  <script>
+    const STORAGE_KEY = 'manajemenDataLaptop';
+    let laptops = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    let editingId = null;
+
+    const form = document.getElementById('laptopForm');
+    const table = document.getElementById('laptopTable');
+    const count = document.getElementById('count');
+    const formTitle = document.getElementById('formTitle');
+    const submitBtn = document.getElementById('submitBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+
+    function save() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(laptops));
+    }
+
+    function formatRupiah(value) {
+      return new Intl.NumberFormat('id-ID', {
+        style: 'currency', currency: 'IDR', maximumFractionDigits: 0
+      }).format(value);
+    }
+
+    function render() {
+      table.replaceChildren();
+      count.textContent = 'Total data: ' + laptops.length + ' laptop';
+      if (laptops.length === 0) {
+        const row = table.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 5;
+        cell.className = 'empty';
+        cell.textContent = 'Belum ada data laptop. Silakan tambahkan data.';
+        return;
+      }
+      laptops.forEach((laptop, index) => {
+        const row = table.insertRow();
+        [index + 1, laptop.merk_laptop, laptop.processor, formatRupiah(laptop.harga)].forEach(value => {
+          row.insertCell().textContent = value;
+        });
+        const actionCell = row.insertCell();
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit';
+        editBtn.textContent = 'Edit';
+        editBtn.type = 'button';
+        editBtn.addEventListener('click', () => startEdit(laptop.id));
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'danger';
+        deleteBtn.textContent = 'Hapus';
+        deleteBtn.type = 'button';
+        deleteBtn.addEventListener('click', () => removeLaptop(laptop.id));
+        actionCell.append(editBtn, deleteBtn);
+      });
+    }
+
+    function resetForm() {
+      form.reset();
+      editingId = null;
+      formTitle.textContent = 'Tambah Data Laptop';
+      submitBtn.textContent = 'Simpan Data';
+      cancelBtn.hidden = true;
+    }
+
+    function startEdit(id) {
+      const laptop = laptops.find(item => item.id === id);
+      if (!laptop) return;
+      editingId = id;
+      form.elements.merk_laptop.value = laptop.merk_laptop;
+      form.elements.processor.value = laptop.processor;
+      form.elements.harga.value = laptop.harga;
+      formTitle.textContent = 'Edit Data Laptop';
+      submitBtn.textContent = 'Simpan Perubahan';
+      cancelBtn.hidden = false;
+      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function removeLaptop(id) {
+      const laptop = laptops.find(item => item.id === id);
+      if (!laptop || !confirm('Hapus data laptop ' + laptop.merk_laptop + '?')) return;
+      laptops = laptops.filter(item => item.id !== id);
+      save();
+      if (editingId === id) resetForm();
+      render();
+    }
+
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const merk_laptop = form.elements.merk_laptop.value.trim();
+      const processor = form.elements.processor.value.trim();
+      const harga = Number(form.elements.harga.value);
+      if (!merk_laptop || !processor || !Number.isFinite(harga) || harga < 0) {
+        alert('Periksa kembali data yang dimasukkan.');
+        return;
+      }
+      if (editingId !== null) {
+        laptops = laptops.map(item => item.id === editingId
+          ? { ...item, merk_laptop, processor, harga } : item);
+      } else {
+        laptops.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2), merk_laptop, processor, harga });
+      }
+      save();
+      resetForm();
+      render();
+    });
+
+    cancelBtn.addEventListener('click', resetForm);
+    render();
+  </script>
+</body>
+</html>
