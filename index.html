@@ -73,8 +73,8 @@
     </section>
   </main>
   <script>
-    const STORAGE_KEY = 'manajemenDataLaptop';
-    let laptops = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    const API_URL = 'http://localhost:3000/api/laptops';
+    let laptops = [];
     let editingId = null;
 
     const form = document.getElementById('laptopForm');
@@ -84,14 +84,32 @@
     const submitBtn = document.getElementById('submitBtn');
     const cancelBtn = document.getElementById('cancelBtn');
 
-    function save() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(laptops));
-    }
-
     function formatRupiah(value) {
       return new Intl.NumberFormat('id-ID', {
         style: 'currency', currency: 'IDR', maximumFractionDigits: 0
       }).format(value);
+    }
+
+    async function requestApi(url, options) {
+      const response = await fetch(url, options || {});
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || 'Permintaan API gagal');
+      return data;
+    }
+
+    async function loadLaptops() {
+      try {
+        laptops = await requestApi(API_URL);
+        render();
+      } catch (error) {
+        table.replaceChildren();
+        const row = table.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 5;
+        cell.className = 'empty';
+        cell.textContent = 'API belum terhubung. Jalankan server Node.js dan MongoDB, lalu muat ulang halaman. Detail: ' + error.message;
+        count.textContent = '';
+      }
     }
 
     function render() {
@@ -115,12 +133,12 @@
         editBtn.className = 'edit';
         editBtn.textContent = 'Edit';
         editBtn.type = 'button';
-        editBtn.addEventListener('click', () => startEdit(laptop.id));
+        editBtn.addEventListener('click', () => startEdit(laptop._id));
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'danger';
         deleteBtn.textContent = 'Hapus';
         deleteBtn.type = 'button';
-        deleteBtn.addEventListener('click', () => removeLaptop(laptop.id));
+        deleteBtn.addEventListener('click', () => removeLaptop(laptop._id));
         actionCell.append(editBtn, deleteBtn);
       });
     }
@@ -134,7 +152,7 @@
     }
 
     function startEdit(id) {
-      const laptop = laptops.find(item => item.id === id);
+      const laptop = laptops.find(item => item._id === id);
       if (!laptop) return;
       editingId = id;
       form.elements.merk_laptop.value = laptop.merk_laptop;
@@ -146,16 +164,19 @@
       form.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    function removeLaptop(id) {
-      const laptop = laptops.find(item => item.id === id);
+    async function removeLaptop(id) {
+      const laptop = laptops.find(item => item._id === id);
       if (!laptop || !confirm('Hapus data laptop ' + laptop.merk_laptop + '?')) return;
-      laptops = laptops.filter(item => item.id !== id);
-      save();
-      if (editingId === id) resetForm();
-      render();
+      try {
+        await requestApi(API_URL + '/' + id, { method: 'DELETE' });
+        if (editingId === id) resetForm();
+        await loadLaptops();
+      } catch (error) {
+        alert('Gagal menghapus data: ' + error.message);
+      }
     }
 
-    form.addEventListener('submit', event => {
+    form.addEventListener('submit', async event => {
       event.preventDefault();
       const merk_laptop = form.elements.merk_laptop.value.trim();
       const processor = form.elements.processor.value.trim();
@@ -164,19 +185,22 @@
         alert('Periksa kembali data yang dimasukkan.');
         return;
       }
-      if (editingId !== null) {
-        laptops = laptops.map(item => item.id === editingId
-          ? { ...item, merk_laptop, processor, harga } : item);
-      } else {
-        laptops.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2), merk_laptop, processor, harga });
+      const payload = JSON.stringify({ merk_laptop, processor, harga });
+      try {
+        await requestApi(editingId ? API_URL + '/' + editingId : API_URL, {
+          method: editingId ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload
+        });
+        resetForm();
+        await loadLaptops();
+      } catch (error) {
+        alert('Gagal menyimpan data: ' + error.message);
       }
-      save();
-      resetForm();
-      render();
     });
 
     cancelBtn.addEventListener('click', resetForm);
-    render();
+    loadLaptops();
   </script>
 </body>
 </html>
